@@ -15,7 +15,7 @@ const QRCode   = require('qrcode');
 const pino     = require('pino');
 
 const {
-  default: makeWASocket,
+  default:     makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
@@ -37,83 +37,126 @@ function generateSessionId() {
 
 // ── Encode creds.json → NovaSpark!<base64(gzip)> ────────────────────────────
 function encodeCreds(credsJson) {
-  const buf        = Buffer.from(credsJson, 'utf-8');
-  const compressed = zlib.gzipSync(buf);
+  const compressed = zlib.gzipSync(Buffer.from(credsJson, 'utf-8'));
   return 'NovaSpark!' + compressed.toString('base64');
 }
 
-// ── Attach event handlers to a socket for a given session ────────────────────
-function attachHandlers(sock, sessionId, saveCreds) {
+// ── Spawn a Baileys socket and attach all handlers ───────────────────────────
+async function spawnSocket(sessionId) {
+  const sd = sessions.get(sessionId);
+  if (!sd) return;
+
+  // Kill old socket if any
+  if (sd.sock) { try { sd.sock.end(); } catch {} }
+
+  const { state, saveCreds } = await useMultiFileAuthState(sd.tmpDir);
+  const { version }          = await fetchLatestBaileysVersion();
+  const logger               = pino({ level: 'silent' });
+
+  // IMPORTANT: Use 'Chrome' as browser[1] — this maps to PlatformType=1
+  // which WhatsApp accepts for pairing code requests.
+  // 'Safari' (PlatformType=5) causes WhatsApp to silently ignore pairing code requests.
+  const sock = makeWASocket({
+    version,
+    auth: {
+      creds: state.creds,
+      keys:  makeCacheableSignalKeyStore(state.keys, logger),
+    },
+    logger,
+    printQRInTerminal: false,
+    browser: ['Ubuntu', 'Chrome', '22.04.4'],
+    keepAliveIntervalMs:      15000,
+    connectTimeoutMs:         60000,
+    defaultQueryTimeoutMs:    30000,
+  });
+
+  sd.sock      = sock;
+  sd.saveCreds = saveCreds;
+
+  // ── connection.update ──────────────────────────────────────────────────────
   sock.ev.on('connection.update', async (update) => {
     const { qr, connection, lastDisconnect } = update;
-    const sd = sessions.get(sessionId);
-    if (!sd) return;
+    const s = sessions.get(sessionId);
+    if (!s) return;
 
-    // ── New QR (fires every ~20s as WhatsApp rotates it) ──────────────────
-    if (qr) {
+    // ── QR received ─────────────────────────────────────────────────────────
+    if (qr !== undefined && qr !== null) {
+
+      // 1. Request pairing code FIRST (before any async work) if phone given
+      //    and not yet requested. This must happen while ws is still open and
+      //    synchronous relative to the QR event.
+      if (s.phone && !s.pairingCodeRequested) {
+        s.pairingCodeRequested = true;
+        // Small delay to allow the Noise handshake to settle, then send
+        setTimeout(async () => {
+          const cur = sessions.get(sessionId);
+          if (!cur || cur.successHandled) return;
+          try {
+            const code     = await sock.requestPairingCode(s.phone);
+            cur.pairingCode = code;
+            cur.status      = 'pairing';
+            console.log(`[PAIR] Pairing code obtained for session ${sessionId}: ${code}`);
+          } catch (e) {
+            console.warn(`[PAIR] requestPairingCode failed for ${sessionId}: ${e.message}`);
+            // Fall back to QR-only — don't kill the session
+            cur.status = 'qr';
+          }
+        }, 500);
+      } else if (!s.phone) {
+        s.status = 'qr';
+      }
+      // else: pairing code already requested, just update QR image
+
+      // 2. Generate QR data URL (async, after the pairing code request is fired)
       try {
-        sd.qrDataUrl = await QRCode.toDataURL(qr, { width: 320, margin: 2 });
+        s.qrDataUrl = await QRCode.toDataURL(qr, { width: 320, margin: 2 });
       } catch (e) {
-        console.error('[QR] toDataURL failed:', e.message);
+        console.error('[QR] toDataURL error:', e.message);
       }
-
-      // Request pairing code once (only if phone provided, only first time)
-      if (sd.phone && !sd.pairingCodeRequested) {
-        sd.pairingCodeRequested = true;
-        try {
-          const code     = await sock.requestPairingCode(sd.phone);
-          sd.pairingCode = code;
-          sd.status      = 'pairing';
-        } catch (e) {
-          console.warn('[PAIR] Pairing code failed, QR only:', e.message);
-          sd.status = 'qr';
-        }
-      } else if (!sd.phone) {
-        sd.status = 'qr';
-      }
-      // If pairing code already obtained, keep status='pairing' but QR still refreshes
     }
 
-    // ── Connected ─────────────────────────────────────────────────────────
+    // ── Connected ────────────────────────────────────────────────────────────
     if (connection === 'open') {
-      if (sd.successHandled) return;
-      sd.successHandled = true;
-      sd.status         = 'success';
+      if (s.successHandled) return;
+      s.successHandled = true;
+      s.status         = 'success';
 
       try {
         await saveCreds();
-        await new Promise(r => setTimeout(r, 600)); // let saveCreds flush
-        const credsPath = path.join(sd.tmpDir, 'creds.json');
-        if (!fs.existsSync(credsPath)) throw new Error('creds.json missing after save');
-        sd.sessionString = encodeCreds(fs.readFileSync(credsPath, 'utf-8'));
+        await new Promise(r => setTimeout(r, 700)); // flush to disk
+        const credsPath = path.join(s.tmpDir, 'creds.json');
+        if (!fs.existsSync(credsPath)) throw new Error('creds.json not found');
+        s.sessionString = encodeCreds(fs.readFileSync(credsPath, 'utf-8'));
+        console.log(`[PAIR] Session string generated for ${sessionId}`);
       } catch (e) {
-        console.error('[PAIR] Session encode failed:', e.message);
-        sd.status = 'failed';
+        console.error(`[PAIR] Failed to encode session ${sessionId}:`, e.message);
+        s.status = 'failed';
       }
 
-      // End socket after a delay (avoid triggering close handler prematurely)
+      // End socket after delay to avoid race with creds.update
       setTimeout(() => { try { sock.end(); } catch {} }, 1500);
     }
 
-    // ── Disconnected ──────────────────────────────────────────────────────
+    // ── Disconnected ─────────────────────────────────────────────────────────
     if (connection === 'close') {
-      if (sd.successHandled) return; // already done — ignore post-success close
+      if (s.successHandled) return; // post-success close — ignore
 
       const code = lastDisconnect?.error?.output?.statusCode;
+      console.log(`[PAIR] Disconnected session ${sessionId} — code ${code}`);
 
       if (code === DisconnectReason.loggedOut) {
-        // Hard ban/logout — stop
-        sd.status = 'failed';
+        s.status = 'failed';
         return;
       }
 
-      // Everything else (408 timeout, stream error, restart required, etc.)
-      // is a temporary disconnect — reconnect and keep going
-      console.log(`[PAIR] Disconnect (code ${code}) on session ${sessionId} — reconnecting in 3s`);
-      setTimeout(() => {
-        const current = sessions.get(sessionId);
-        if (!current || current.successHandled || current.status === 'timeout') return;
-        reconnectSession(sessionId);
+      // All other codes: reconnect
+      setTimeout(async () => {
+        const cur = sessions.get(sessionId);
+        if (!cur || cur.successHandled || cur.status === 'timeout' || cur.status === 'failed') return;
+        console.log(`[PAIR] Reconnecting session ${sessionId}...`);
+        try { await spawnSocket(sessionId); } catch (e) {
+          console.error(`[PAIR] Reconnect failed for ${sessionId}:`, e.message);
+        }
       }, 3000);
     }
   });
@@ -125,10 +168,11 @@ function attachHandlers(sock, sessionId, saveCreds) {
 async function createPairingSession(sessionId, phone) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `ns-pair-${sessionId}-`));
 
-  const sessionData = {
+  sessions.set(sessionId, {
     tmpDir,
     phone:                phone || null,
     sock:                 null,
+    saveCreds:            null,
     qrDataUrl:            null,
     pairingCode:          null,
     pairingCodeRequested: false,
@@ -136,74 +180,27 @@ async function createPairingSession(sessionId, phone) {
     status:               'connecting',
     createdAt:            Date.now(),
     successHandled:       false,
-  };
-  sessions.set(sessionId, sessionData);
+  });
 
   await spawnSocket(sessionId);
 
-  // Auto-timeout after 5 minutes
+  // Hard timeout after 5 minutes
   setTimeout(() => {
-    const sd = sessions.get(sessionId);
-    if (sd && !sd.successHandled && sd.status !== 'failed') {
-      sd.status = 'timeout';
-      try { sd.sock.end(); } catch {}
+    const s = sessions.get(sessionId);
+    if (s && !s.successHandled && s.status !== 'failed') {
+      s.status = 'timeout';
+      try { s.sock.end(); } catch {}
     }
   }, 5 * 60 * 1000);
-
-  return sessionId;
-}
-
-// ── Spawn (or respawn) a Baileys socket for a session ────────────────────────
-async function spawnSocket(sessionId) {
-  const sd = sessions.get(sessionId);
-  if (!sd) return;
-
-  if (sd.sock) {
-    try { sd.sock.end(); } catch {}
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState(sd.tmpDir);
-  const { version }          = await fetchLatestBaileysVersion();
-  const logger               = pino({ level: 'silent' });
-
-  const sock = makeWASocket({
-    version,
-    auth: {
-      creds: state.creds,
-      keys:  makeCacheableSignalKeyStore(state.keys, logger),
-    },
-    logger,
-    printQRInTerminal: false,
-    browser: ['NovaSpark Pairing', 'Safari', '17.0'],
-    keepAliveIntervalMs: 15000,
-    connectTimeoutMs:    60000,
-    defaultQueryTimeoutMs: 30000,
-  });
-
-  sd.sock       = sock;
-  sd.saveCreds  = saveCreds;
-
-  attachHandlers(sock, sessionId, saveCreds);
-}
-
-// ── Reconnect (reuses same session data, just new socket) ────────────────────
-async function reconnectSession(sessionId) {
-  const sd = sessions.get(sessionId);
-  if (!sd || sd.successHandled || sd.status === 'timeout' || sd.status === 'failed') return;
-  try {
-    await spawnSocket(sessionId);
-  } catch (e) {
-    console.error('[PAIR] Reconnect failed:', e.message);
-  }
 }
 
 // ── Cleanup sessions older than 12 minutes ───────────────────────────────────
 setInterval(() => {
   const now = Date.now();
-  for (const [id, sd] of sessions.entries()) {
-    if (now - sd.createdAt > 12 * 60 * 1000) {
-      try { sd.sock.end(); } catch {}
-      try { fs.rmSync(sd.tmpDir, { recursive: true, force: true }); } catch {}
+  for (const [id, s] of sessions.entries()) {
+    if (now - s.createdAt > 12 * 60 * 1000) {
+      try { s.sock.end(); } catch {}
+      try { fs.rmSync(s.tmpDir, { recursive: true, force: true }); } catch {}
       sessions.delete(id);
     }
   }
@@ -213,17 +210,16 @@ setInterval(() => {
 // API ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// POST /api/pair  — body: { phone?: string }
-// phone is OPTIONAL — omit it for pure QR-only mode
+// POST /api/pair   body: { phone?: string }
 app.post('/api/pair', async (req, res) => {
   try {
     const { phone } = req.body || {};
 
     let cleanPhone = null;
-    if (phone && String(phone).trim() !== '') {
+    if (phone && String(phone).trim()) {
       cleanPhone = String(phone).replace(/\D/g, '');
       if (cleanPhone.length < 7 || cleanPhone.length > 15) {
-        return res.status(400).json({ error: 'Invalid phone number. Include country code, digits only (e.g. 263786831091).' });
+        return res.status(400).json({ error: 'Invalid phone number. Use country code + digits only (e.g. 263786831091).' });
       }
     }
 
@@ -233,39 +229,34 @@ app.post('/api/pair', async (req, res) => {
     return res.json({ sessionId, method: cleanPhone ? 'code+qr' : 'qr' });
   } catch (e) {
     console.error('[API /pair]', e);
-    return res.status(500).json({ error: 'Failed to start pairing session: ' + e.message });
+    return res.status(500).json({ error: 'Failed to start session: ' + e.message });
   }
 });
 
 // GET /api/status/:id
 app.get('/api/status/:id', (req, res) => {
-  const sd = sessions.get(req.params.id);
-  if (!sd) return res.status(404).json({ error: 'Session not found or expired.' });
-
+  const s = sessions.get(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Session not found or expired.' });
   return res.json({
-    status:        sd.status,
-    qrDataUrl:     sd.qrDataUrl    || null,
-    pairingCode:   sd.pairingCode  || null,
-    sessionString: sd.sessionString || null,
-    phone:         sd.phone        || null,
+    status:        s.status,
+    qrDataUrl:     s.qrDataUrl     || null,
+    pairingCode:   s.pairingCode   || null,
+    sessionString: s.sessionString || null,
+    phone:         s.phone         || null,
   });
 });
 
-// DELETE /api/session/:id — cancel
+// DELETE /api/session/:id
 app.delete('/api/session/:id', (req, res) => {
-  const sd = sessions.get(req.params.id);
-  if (sd) {
-    try { sd.sock.end(); } catch {}
-    try { fs.rmSync(sd.tmpDir, { recursive: true, force: true }); } catch {}
+  const s = sessions.get(req.params.id);
+  if (s) {
+    try { s.sock.end(); } catch {}
+    try { fs.rmSync(s.tmpDir, { recursive: true, force: true }); } catch {}
     sessions.delete(req.params.id);
   }
   return res.json({ ok: true });
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => {
-  console.log(`⚡ NovaSpark Pairing Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`⚡ NovaSpark Pairing Server on port ${PORT}`));
