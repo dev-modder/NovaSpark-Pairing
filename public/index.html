@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovaSpark Bot — Session Pairing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --card:      #16161f;
+      --border:    #2a2a3a;
+      --accent:    #7c5cfc;
+      --accent2:   #5b9df9;
+      --gold:      #f5c542;
+      --green:     #2ecc71;
+      --red:       #e74c3c;
+      --text:      #e8e8f0;
+      --muted:     #6b6b80;
+      --radius:    16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── Background glow ── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 900px; height: 500px;
+      background: radial-gradient(ellipse at center, rgba(124,92,252,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+      position: relative; z-index: 1;
+    }
+    .logo-icon {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo-text span { color: var(--accent); }
+    .badge {
+      margin-left: auto;
+      padding: 4px 10px;
+      background: rgba(124,92,252,0.15);
+      border: 1px solid rgba(124,92,252,0.3);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Main ── */
+    main {
+      width: 100%;
+      max-width: 560px;
+      padding: 48px 20px 80px;
+      position: relative; z-index: 1;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+
+    /* ── Steps indicator ── */
+    .steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 32px;
+    }
+    .step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 14px;
+      left: calc(50% + 14px);
+      right: calc(-50% + 14px);
+      height: 2px;
+      background: var(--border);
+      transition: background 0.4s;
+    }
+    .step.done:not(:last-child)::after { background: var(--accent); }
+    .step-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+    .step.active .step-num {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 0 4px rgba(124,92,252,0.2);
+    }
+    .step.done .step-num {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+    .step-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-align: center;
+    }
+    .step.active .step-label { color: var(--text); }
+    .step.done .step-label   { color: var(--green); }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 20px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.3px;
+    }
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-prefix {
+      position: absolute;
+      left: 14px;
+      font-size: 15px;
+      color: var(--muted);
+      user-select: none;
+    }
+    input[type="tel"] {
+      width: 100%;
+      padding: 13px 14px 13px 36px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input[type="tel"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+    }
+    input[type="tel"]::placeholder { color: var(--muted); }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .hint strong { color: var(--text); }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #5b4bc8);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(124,92,252,0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(124,92,252,0.4);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      font-size: 13px;
+      padding: 10px;
+      margin-top: 12px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Loader spinner ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Status panel ── */
+    #status-panel { display: none; }
+    #status-panel.visible { display: block; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+    .status-bar.connecting { background: rgba(91,157,249,0.1); border: 1px solid rgba(91,157,249,0.25); color: var(--accent2); }
+    .status-bar.success    { background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); color: var(--green); }
+    .status-bar.failed     { background: rgba(231,76,60,0.1);  border: 1px solid rgba(231,76,60,0.25);  color: var(--red); }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.pulse {
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .connecting .status-dot { background: var(--accent2); }
+    .success    .status-dot { background: var(--green); }
+    .failed     .status-dot { background: var(--red); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    /* ── Method tabs ── */
+    .method-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: rgba(124,92,252,0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── QR box ── */
+    .qr-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      width: fit-content;
+    }
+    .qr-box img { display: block; border-radius: 4px; }
+
+    /* ── Pairing code display ── */
+    .code-display {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .code-chunk {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: var(--text);
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .code-divider {
+      font-size: 28px;
+      font-weight: 300;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+    }
+
+    /* ── Waiting animation ── */
+    .waiting-msg {
+      text-align: center;
+      padding: 32px 0;
+    }
+    .waiting-msg .dots span {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin: 0 3px;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .waiting-msg .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .waiting-msg .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40%            { transform: scale(1.0); opacity: 1; }
+    }
+    .waiting-msg p { margin-top: 14px; color: var(--muted); font-size: 14px; }
+
+    /* ── Session result ── */
+    .result-box {
+      margin-top: 8px;
+    }
+    .result-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+    .session-string-wrap {
+      position: relative;
+    }
+    .session-string {
+      width: 100%;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 48px 14px 14px;
+      color: #7c5cfc;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+      user-select: all;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: rgba(124,92,252,0.15);
+      border: 1px solid rgba(124,92,252,0.3);
+      border-radius: 6px;
+      color: var(--accent);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px 8px;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+    .copy-btn:hover { background: rgba(124,92,252,0.3); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+    .deploy-steps {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .deploy-steps h4 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .deploy-steps ol {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .deploy-steps li {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .deploy-steps li strong { color: var(--text); }
+    .deploy-steps code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(124,92,252,0.1);
+      color: var(--accent);
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+      width: 100%;
+      position: relative; z-index: 1;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      header { padding: 16px 20px; }
+      main   { padding: 32px 16px 60px; }
+      .card  { padding: 22px; }
+      .hero h1 { font-size: 26px; }
+      .code-chunk { font-size: 22px; padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">⚡</div>
+  <div class="logo-text">Nova<span>Spark</span> Bot</div>
+  <div class="badge">v5 · 2026</div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>WhatsApp Session<br>Pairing</h1>
+    <p>Generate your <strong>SESSION_ID</strong> to deploy NovaSpark Bot on Render.com</p>
+  </div>
+
+  <div class="card">
+    <!-- Step indicators -->
+    <div class="steps" id="steps">
+      <div class="step active" id="step1">
+        <div class="step-num">1</div>
+        <div class="step-label">Enter Number</div>
+      </div>
+      <div class="step" id="step2">
+        <div class="step-num">2</div>
+        <div class="step-label">Pair Device</div>
+      </div>
+      <div class="step" id="step3">
+        <div class="step-num">3</div>
+        <div class="step-label">Copy Session</div>
+      </div>
+    </div>
+
+    <!-- ── PHASE 1: phone input ── -->
+    <div id="phase-input">
+      <div class="form-group">
+        <label>WHATSAPP NUMBER</label>
+        <div class="input-wrap">
+          <span class="input-prefix">+</span>
+          <input type="tel" id="phone-input"
+            placeholder="263786831091"
+            autocomplete="off"
+            inputmode="numeric"
+            maxlength="15" />
+        </div>
+        <div class="hint">
+          Include <strong>country code</strong>, no + or spaces.<br>
+          e.g. <strong>263786831091</strong> for Zimbabwe · <strong>27821234567</strong> for South Africa
+        </div>
+      </div>
+      <button class="btn btn-primary" id="start-btn" onclick="startPairing()">
+        <span>Generate Session</span>
+      </button>
+    </div>
+
+    <!-- ── PHASE 2: connecting + pair ── -->
+    <div id="phase-pair" style="display:none;">
+      <div id="status-bar-wrap"></div>
+
+      <!-- Method tabs (only when both available) -->
+      <div class="method-tabs" id="method-tabs" style="display:none;">
+        <button class="tab active" id="tab-code" onclick="switchTab('code')">📱 Pairing Code</button>
+        <button class="tab" id="tab-qr"   onclick="switchTab('qr')">📷 QR Code</button>
+      </div>
+
+      <!-- Connecting waiting state -->
+      <div id="waiting-state" class="waiting-msg">
+        <div class="dots">
+          <span></span><span></span><span></span>
+        </div>
+        <p>Connecting to WhatsApp servers…</p>
+      </div>
+
+      <!-- Pairing code view -->
+      <div id="view-code" style="display:none;">
+        <p style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:18px;">
+          Open WhatsApp → <strong style="color:var(--text)">Linked Devices</strong> → <strong style="color:var(--text)">Link a Device</strong> → enter code:
+        </p>
+        <div class="code-display" id="code-display"></div>
+        <p style="text-align:center; color:var(--muted); font-size:12px;">
+          Code expires in ~60 seconds. Page auto-refreshes.
+        </p>
+      </div>
+
+      <!-- QR view -->
+      <div id="view-qr" style="display:none;">
+        <p style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:16px;">
+          Open WhatsApp → <strong style="color:var(--text)">Linked Devices</strong> → <strong style="color:var(--text)">Link a Device</strong> → scan:
+        </p>
+        <div class="qr-box">
+          <img id="qr-img" src="" alt="QR Code" width="260" height="260" />
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" onclick="resetAll()">↩ Start over</button>
+    </div>
+
+    <!-- ── PHASE 3: success ── -->
+    <div id="phase-success" style="display:none;">
+      <div class="status-bar success" style="margin-bottom:24px;">
+        <div class="status-dot"></div>
+        ✅ WhatsApp connected successfully!
+      </div>
+
+      <div class="result-box">
+        <div class="result-label">Your SESSION_ID</div>
+        <div class="session-string-wrap">
+          <div class="session-string" id="session-output"></div>
+          <button class="copy-btn" id="copy-btn" onclick="copySession()" title="Copy">⧉</button>
+        </div>
+      </div>
+
+      <div class="deploy-steps">
+        <h4>🚀 How to deploy on Render.com</h4>
+        <ol>
+          <li>Go to your <strong>Render dashboard</strong> → open your NovaSpark service</li>
+          <li>Click <strong>Environment</strong> in the left sidebar</li>
+          <li>Find the <code>SESSION_ID</code> variable and paste your session string above</li>
+          <li>Click <strong>Save Changes</strong> and then <strong>Manual Deploy</strong></li>
+          <li>Your bot should come online within ~30 seconds ⚡</li>
+        </ol>
+      </div>
+
+      <button class="btn btn-ghost" onclick="resetAll()" style="margin-top:16px;">
+        ↩ Pair another number
+      </button>
+    </div>
+
+    <!-- ── PHASE: failed / timeout ── -->
+    <div id="phase-failed" style="display:none;">
+      <div class="status-bar failed" style="margin-bottom:24px;">
+        <div class="status-dot"></div>
+        <span id="fail-msg">Pairing failed or timed out.</span>
+      </div>
+      <p style="color:var(--muted); font-size:14px; line-height:1.7; margin-bottom:20px;">
+        Common reasons:<br>
+        • WhatsApp number is <strong style="color:var(--text)">banned</strong><br>
+        • You have too many <strong style="color:var(--text)">linked devices</strong> (remove some first)<br>
+        • The code <strong style="color:var(--text)">expired</strong> before you entered it<br>
+        • Connection timed out (try again)
+      </p>
+      <button class="btn btn-primary" onclick="resetAll()">Try Again</button>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  ⚡ NovaSpark Bot v5 · 2026 Edition · Powered by Dev-Ntando<br>
+  <a href="https://github.com/dev-modder/NovaSpark-Bot" target="_blank">GitHub</a>
+</footer>
+
+<script>
+  let currentSessionId = null;
+  let pollInterval     = null;
+  let activeTab        = 'code';
+
+  // ── Start pairing ──────────────────────────────────────────────────────────
+  async function startPairing() {
+    const phoneInput = document.getElementById('phone-input').value.replace(/\D/g, '');
+    if (!phoneInput) {
+      shakeInput();
+      return;
+    }
+    if (phoneInput.length < 7 || phoneInput.length > 15) {
+      alert('Please enter a valid phone number with country code (7-15 digits).');
+      return;
+    }
+
+    const btn = document.getElementById('start-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div><span>Connecting…</span>';
+
+    try {
+      const res  = await fetch('/api/pair', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ phone: phoneInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
+
+      currentSessionId = data.sessionId;
+      showPhase('pair');
+      setStep(2);
+      startPolling();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Generate Session</span>';
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // ── Poll status ────────────────────────────────────────────────────────────
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(poll, 2000);
+    poll(); // immediate
+  }
+
+  async function poll() {
+    if (!currentSessionId) return;
+    try {
+      const res  = await fetch('/api/status/' + currentSessionId);
+      if (!res.ok) { handleFailed('Session expired. Please try again.'); return; }
+      const data = await res.json();
+      handleStatus(data);
+    } catch (e) {
+      // network hiccup — keep polling
+    }
+  }
+
+  function handleStatus(data) {
+    const { status, qrDataUrl, pairingCode, sessionString } = data;
+
+    if (status === 'connecting') {
+      showStatusBar('connecting', '⚡ Connecting to WhatsApp…');
+      showWaiting(true);
+    }
+
+    if (status === 'pairing' && pairingCode) {
+      showStatusBar('connecting', '📱 Enter the pairing code in WhatsApp');
+      showWaiting(false);
+      showCode(pairingCode);
+      if (qrDataUrl) enableQRTab(qrDataUrl);
+    }
+
+    if (status === 'qr' && qrDataUrl && !pairingCode) {
+      showStatusBar('connecting', '📷 Scan the QR code in WhatsApp');
+      showWaiting(false);
+      showQR(qrDataUrl);
+    }
+
+    if (status === 'success' && sessionString) {
+      clearInterval(pollInterval);
+      document.getElementById('session-output').textContent = sessionString;
+      showPhase('success');
+      setStep(3);
+    }
+
+    if (status === 'failed' || status === 'timeout') {
+      clearInterval(pollInterval);
+      const msg = status === 'timeout'
+        ? 'Session timed out (5 min). Please try again.'
+        : 'WhatsApp rejected the session (code 401). The number may be banned or already linked elsewhere.';
+      handleFailed(msg);
+    }
+  }
+
+  function handleFailed(msg) {
+    clearInterval(pollInterval);
+    document.getElementById('fail-msg').textContent = msg;
+    showPhase('failed');
+  }
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+  function showPhase(name) {
+    ['input','pair','success','failed'].forEach(p => {
+      document.getElementById('phase-' + p).style.display = p === name ? 'block' : 'none';
+    });
+  }
+
+  function setStep(n) {
+    [1,2,3].forEach(i => {
+      const el = document.getElementById('step' + i);
+      el.classList.remove('active','done');
+      if (i < n)  el.classList.add('done');
+      if (i === n) el.classList.add('active');
+    });
+  }
+
+  function showStatusBar(type, msg) {
+    const wrap = document.getElementById('status-bar-wrap');
+    wrap.innerHTML = `
+      <div class="status-bar ${type}">
+        <div class="status-dot pulse"></div>
+        ${msg}
+      </div>`;
+  }
+
+  function showWaiting(show) {
+    document.getElementById('waiting-state').style.display = show ? 'block' : 'none';
+  }
+
+  function showCode(code) {
+    const clean  = code.replace(/\s|-/g, '');
+    const half1  = clean.slice(0, Math.ceil(clean.length / 2));
+    const half2  = clean.slice(Math.ceil(clean.length / 2));
+    const display = document.getElementById('code-display');
+    display.innerHTML = `
+      <div class="code-chunk">${half1}</div>
+      <div class="code-divider">-</div>
+      <div class="code-chunk">${half2}</div>`;
+    document.getElementById('view-code').style.display = 'block';
+    document.getElementById('view-qr').style.display   = 'none';
+    activeTab = 'code';
+    updateTabUI();
+  }
+
+  function showQR(dataUrl) {
+    document.getElementById('qr-img').src = dataUrl;
+    if (activeTab === 'qr') {
+      document.getElementById('view-qr').style.display   = 'block';
+      document.getElementById('view-code').style.display = 'none';
+    }
+  }
+
+  function enableQRTab(dataUrl) {
+    document.getElementById('qr-img').src = dataUrl;
+    document.getElementById('method-tabs').style.display = 'flex';
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    updateTabUI();
+    document.getElementById('view-code').style.display = tab === 'code' ? 'block' : 'none';
+    document.getElementById('view-qr').style.display   = tab === 'qr'   ? 'block' : 'none';
+  }
+
+  function updateTabUI() {
+    document.getElementById('tab-code').classList.toggle('active', activeTab === 'code');
+    document.getElementById('tab-qr').classList.toggle('active',   activeTab === 'qr');
+  }
+
+  async function copySession() {
+    const text = document.getElementById('session-output').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('copied'); }, 2000);
+    } catch {
+      // fallback
+      const el = document.getElementById('session-output');
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    }
+  }
+
+  function resetAll() {
+    if (pollInterval) clearInterval(pollInterval);
+    if (currentSessionId) {
+      fetch('/api/session/' + currentSessionId, { method: 'DELETE' }).catch(() => {});
+    }
+    currentSessionId = null;
+    activeTab        = 'code';
+
+    document.getElementById('phone-input').value     = '';
+    document.getElementById('code-display').innerHTML = '';
+    document.getElementById('qr-img').src             = '';
+    document.getElementById('method-tabs').style.display = 'none';
+    document.getElementById('view-code').style.display   = 'none';
+    document.getElementById('view-qr').style.display     = 'none';
+    document.getElementById('status-bar-wrap').innerHTML  = '';
+    document.getElementById('waiting-state').style.display = 'block';
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('start-btn').innerHTML = '<span>Generate Session</span>';
+
+    showPhase('input');
+    setStep(1);
+  }
+
+  function shakeInput() {
+    const el = document.getElementById('phone-input');
+    el.style.animation = 'none';
+    el.style.borderColor = 'var(--red)';
+    setTimeout(() => { el.style.borderColor = ''; }, 1500);
+  }
+
+  // ── Allow Enter key to submit ──────────────────────────────────────────────
+  document.getElementById('phone-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startPairing();
+  });
+</script>
+</body>
+</html>
