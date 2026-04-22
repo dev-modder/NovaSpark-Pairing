@@ -1,7 +1,7 @@
 {
   "name": "novaspark-pairing",
-  "version": "1.0.0",
-  "description": "NovaSpark Bot v5 — WhatsApp Session Pairing Server",
+  "version": "7.0.0",
+  "description": "NovaSpark Bot v7 — WhatsApp Session Pairing Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

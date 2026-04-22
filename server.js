@@ -1,5 +1,5 @@
 /**
- * ⚡ NovaSpark Bot v5 — WhatsApp Pairing Server
+ * ⚡ NovaSpark Bot v7 — WhatsApp Pairing Server
  * Generates SESSION_ID for use in bot deployment
  * By Dev-Ntando | Render.com ready
  */

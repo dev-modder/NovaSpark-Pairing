@@ -1,6 +1,6 @@
 # ⚡ NovaSpark Bot — Session Pairing Site
 
-A web-based WhatsApp pairing tool that generates a valid `SESSION_ID` for deploying **NovaSpark Bot v5** on Render.com.
+A web-based WhatsApp pairing tool that generates a valid `SESSION_ID` for deploying **NovaSpark Bot v7** on Render.com.
 
 ## How it works
 
@@ -42,7 +42,7 @@ Sessions are encoded as:
 ```
 NovaSpark!<base64(gzip(creds.json))>
 ```
-This matches the exact format expected by NovaSpark Bot v5's `index.js`.
+This matches the exact format expected by NovaSpark Bot v7's `index.js`.
 
 ## Notes
 - Sessions expire from the pairing site's memory after 10 minutes (cleanup)
