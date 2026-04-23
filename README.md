@@ -1,51 +1,39 @@
-# ⚡ NovaSpark Bot — Session Pairing Site
+# ⚡ NovaSpark Pairing Site — v7
 
-A web-based WhatsApp pairing tool that generates a valid `SESSION_ID` for deploying **NovaSpark Bot v7** on Render.com.
+A web-based WhatsApp pairing tool that generates a valid `SESSION_ID` for deploying **NovaSpark Bot v7** on **NovaSpark Nodes**.
 
 ## How it works
+1. User enters their WhatsApp number (or scans QR code)
+2. WhatsApp sends a 6-digit pairing code (or displays QR)
+3. User links their device in WhatsApp → Linked Devices
+4. Server encodes the session credentials as a `NovaSpark!...` string
+5. User copies the SESSION_ID into their NovaSpark Nodes environment variable
 
-1. User enters their WhatsApp number (with country code)
-2. The server connects to WhatsApp via Baileys and requests a **pairing code**
-3. User enters the code in WhatsApp → Linked Devices
-4. The server captures `creds.json`, encodes it as `NovaSpark!<base64(gzip)>`, and displays it
-5. User copies the SESSION_ID into their Render environment variable
+## Deploy the Pairing Site
 
-## Deploy on Render.com
+### Option A — NovaSpark Nodes (recommended)
+1. Log in at [novaspark-nodes.zone.id](https://novaspark-nodes.zone.id)
+2. Create a new Node.js service
+3. Link this GitHub repo: `dev-modder/NovaSpark-Pairing`
+4. Set `PORT` env var if needed
+5. Deploy — the pairing site will be live instantly
 
-### Option A — One-click via render.yaml
-1. Push this repo to GitHub
-2. Go to [render.com/new](https://render.com/new) → **New Web Service**
-3. Connect your GitHub repo
-4. Render auto-detects `render.yaml` — click **Deploy**
-
-### Option B — Manual
-| Setting       | Value            |
-|---------------|------------------|
-| Runtime       | Node             |
-| Build Command | `npm install`    |
-| Start Command | `node server.js` |
-| Plan          | Free             |
-
-No environment variables needed for the pairing site itself.
-
-## Local development
-
+### Option B — Manual (VPS / any Node host)
 ```bash
+git clone https://github.com/dev-modder/NovaSpark-Pairing.git
+cd NovaSpark-Pairing
 npm install
 node server.js
-# Open http://localhost:3000
 ```
 
-## Session format
+## Environment Variables
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | Port to run the pairing server on |
 
-Sessions are encoded as:
-```
-NovaSpark!<base64(gzip(creds.json))>
-```
-This matches the exact format expected by NovaSpark Bot v7's `index.js`.
+## Related
+- [NovaSpark-Bot](https://github.com/dev-modder/NovaSpark-Bot) — the bot itself
+- [NovaSpark Nodes](https://novaspark-nodes.zone.id) — official hosting panel
 
-## Notes
-- Sessions expire from the pairing site's memory after 10 minutes (cleanup)
-- The pairing site does NOT store your session after you close the page
-- Each pairing session is isolated in a temp directory that gets cleaned up automatically
-- Supports both pairing code method and QR code fallback
+---
+_By Dev-Ntando_
