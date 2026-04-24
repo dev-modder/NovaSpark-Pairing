@@ -735,7 +735,7 @@
     hideStatus();
 
     try {
-      const r = await fetch('/pair', {
+      const r = await fetch('/api/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
@@ -744,7 +744,6 @@
       if (!r.ok || d.error) throw new Error(d.error || 'Failed');
 
       sessionKey = d.sessionId;
-      document.getElementById('codeVal').textContent = d.code || '------';
       document.getElementById('codeSection').style.display = 'block';
       setLoading(false);
       startCodeTimer(120);
@@ -761,7 +760,7 @@
     setLoading(true, 'Generating QR code...');
     hideStatus();
     try {
-      const r = await fetch('/pair', {
+      const r = await fetch('/api/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qr: true }),
@@ -785,7 +784,7 @@
   async function pollForQR(sk, attempts=0) {
     if (attempts > 30) return;
     try {
-      const r = await fetch('/status/' + sk);
+      const r = await fetch('/api/status/' + sk);
       const d = await r.json();
       if (d.qrDataUrl) {
         const img = document.getElementById('qrSection').querySelector('img') ||
@@ -819,12 +818,23 @@
       count++;
       if (count > 90) { clearInterval(pollInterval); return; }
       try {
-        const r = await fetch('/status/' + sk);
+        const r = await fetch('/api/status/' + sk);
         const d = await r.json();
-        if (d.sessionId) {
+
+        // Update pairing code display as soon as it arrives
+        if (d.pairingCode && document.getElementById('codeVal').textContent === '------') {
+          document.getElementById('codeVal').textContent = d.pairingCode;
+        }
+
+        if (d.status === 'success' && d.sessionString) {
           clearInterval(pollInterval);
           if (codeTimerInt) clearInterval(codeTimerInt);
-          onConnected(d.sessionId);
+          onConnected(d.sessionString);
+        } else if (d.status === 'failed' || d.status === 'timeout') {
+          clearInterval(pollInterval);
+          if (codeTimerInt) clearInterval(codeTimerInt);
+          setLoading(false);
+          showStatus('❌ Session ' + d.status + '. Please refresh and try again.', 'error');
         }
       } catch {}
     }, 3000);
