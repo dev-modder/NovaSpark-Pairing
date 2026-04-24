@@ -136,16 +136,33 @@ async function spawnSocket(sessionId, retryCount) {
         s.sessionString = encodeCreds(fs.readFileSync(credsPath, 'utf-8'));
         console.log('[PAIR] Session string ready for ' + sessionId);
 
-        // Send SESSION_ID to the user's own WhatsApp number
-        if (s.phone) {
+        // Wait for WA to fully settle before sending — sending immediately
+        // after connection.open causes the message to silently drop
+        await delay(3000);
+
+        // Resolve the phone: for QR users s.phone is null, read from creds
+        let targetPhone = s.phone;
+        if (!targetPhone) {
           try {
-            const jid = s.phone + '@s.whatsapp.net';
+            const creds = JSON.parse(fs.readFileSync(path.join(s.tmpDir, 'creds.json'), 'utf-8'));
+            // me.id looks like "263786831091:123@s.whatsapp.net"
+            if (creds && creds.me && creds.me.id) {
+              targetPhone = creds.me.id.split(':')[0].split('@')[0];
+            }
+          } catch (e) {
+            console.warn('[PAIR] Could not extract phone from creds: ' + e.message);
+          }
+        }
+
+        // Send SESSION_ID to the user's own WhatsApp inbox
+        if (targetPhone) {
+          try {
+            const jid = targetPhone + '@s.whatsapp.net';
             const msg =
               '⚡ *NovaSpark Bot — SESSION_ID*\n\n' +
-              'Your session has been generated successfully!\n\n' +
-              '```' + s.sessionString + '```\n\n' +
-              '📋 Copy the string above and paste it as your *SESSION_ID* environment variable.\n\n' +
-              '🔒 Keep this private — anyone with it can control your bot.\n\n' +
+              'Your session has been generated successfully! Copy the string below and set it as your *SESSION_ID* environment variable on NovaSpark Nodes.\n\n' +
+              s.sessionString + '\n\n' +
+              '🔒 *Keep this private* — anyone with this string can control your bot.\n\n' +
               '_— NovaSpark Pairing Server_';
             await sock.sendMessage(jid, { text: msg });
             console.log('[PAIR] SESSION_ID sent to WhatsApp inbox for ' + sessionId);
@@ -158,7 +175,8 @@ async function spawnSocket(sessionId, retryCount) {
         s.status = 'failed';
       }
 
-      setTimeout(() => { try { sock.end(); } catch {} }, 3000);
+      // Close socket 2s after message send attempt, not immediately
+      setTimeout(() => { try { sock.end(); } catch {} }, 2000);
     }
 
     // Disconnected
