@@ -135,12 +135,30 @@ async function spawnSocket(sessionId, retryCount) {
         if (!fs.existsSync(credsPath)) throw new Error('creds.json not found');
         s.sessionString = encodeCreds(fs.readFileSync(credsPath, 'utf-8'));
         console.log('[PAIR] Session string ready for ' + sessionId);
+
+        // Send SESSION_ID to the user's own WhatsApp number
+        if (s.phone) {
+          try {
+            const jid = s.phone + '@s.whatsapp.net';
+            const msg =
+              '⚡ *NovaSpark Bot — SESSION_ID*\n\n' +
+              'Your session has been generated successfully!\n\n' +
+              '```' + s.sessionString + '```\n\n' +
+              '📋 Copy the string above and paste it as your *SESSION_ID* environment variable.\n\n' +
+              '🔒 Keep this private — anyone with it can control your bot.\n\n' +
+              '_— NovaSpark Pairing Server_';
+            await sock.sendMessage(jid, { text: msg });
+            console.log('[PAIR] SESSION_ID sent to WhatsApp inbox for ' + sessionId);
+          } catch (e) {
+            console.warn('[PAIR] Could not send SESSION_ID to inbox: ' + e.message);
+          }
+        }
       } catch (e) {
         console.error('[PAIR] Encode failed for ' + sessionId + ':', e.message);
         s.status = 'failed';
       }
 
-      setTimeout(() => { try { sock.end(); } catch {} }, 2000);
+      setTimeout(() => { try { sock.end(); } catch {} }, 3000);
     }
 
     // Disconnected

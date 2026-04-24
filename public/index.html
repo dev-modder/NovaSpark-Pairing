@@ -436,6 +436,35 @@
       content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
+    /* ── Done steps ───────────────────────────────────────────── */
+    .done-steps {
+      display: flex; flex-direction: column; gap: 12px; margin-top: 8px;
+    }
+    .done-step {
+      display: flex; align-items: flex-start; gap: 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px;
+      animation: slideUp 0.4s ease both;
+    }
+    .done-step:nth-child(1) { animation-delay: 0.05s; }
+    .done-step:nth-child(2) { animation-delay: 0.15s; }
+    .done-step:nth-child(3) { animation-delay: 0.25s; }
+    .done-icon {
+      width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .done-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+    .done-sub   { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    @keyframes popIn {
+      0%   { opacity: 0; transform: scale(0.5); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes slideUp {
+      0%   { opacity: 0; transform: translateY(12px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
     /* ── Responsive ───────────────────────────────────────────── */
     @media (max-width: 520px) {
       header { padding: 16px 20px; }
@@ -573,38 +602,47 @@
       </button>
     </div>
 
-    <!-- Step 3: Deploy instructions -->
+    <!-- Step 3: Done screen -->
     <div class="form-section" id="sec3">
-      <label class="form-label">Deploy NovaSpark Bot</label>
-      <ul class="deploy-steps">
-        <li>
-          <span>Fork or clone the bot repository on GitHub: <br/>
-            <a href="https://github.com/dev-modder/NovaSpark-Bot" target="_blank" style="color:var(--accent);">
-              github.com/dev-modder/NovaSpark-Bot
-            </a>
-          </span>
-        </li>
-        <li>
-          <span>Click the button below to deploy on <strong>NovaSpark Nodes</strong> — the official hosting panel</span>
-        </li>
-        <li>
-          <span>Set environment variable: <code>SESSION_ID</code> = <em>your copied session ID</em></span>
-        </li>
-        <li>
-          <span>Click <strong>Deploy</strong> and wait ~2 minutes. Bot goes online automatically!</span>
-        </li>
-        <li>
-          <span>Open WhatsApp and type <code>.menu</code> to the bot number to confirm it's live.</span>
-        </li>
-      </ul>
+      <div style="text-align:center; padding: 12px 0 24px;">
+        <div style="font-size: 56px; margin-bottom: 16px; animation: popIn 0.5s cubic-bezier(.175,.885,.32,1.275);">🎉</div>
+        <h2 style="font-size:22px; font-weight:800; margin-bottom:8px;">You're all set!</h2>
+        <p style="color:var(--muted); font-size:14px; line-height:1.6;">
+          Your <strong style="color:var(--text);">SESSION_ID</strong> has been copied above.<br/>
+          We've also sent it directly to your <strong style="color:var(--green);">WhatsApp inbox</strong> 📩
+        </p>
+      </div>
 
-      <div style="margin-top:24px; display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="done-steps">
+        <div class="done-step">
+          <div class="done-icon" style="background:rgba(46,204,113,0.15);">✅</div>
+          <div class="done-body">
+            <div class="done-title">SESSION_ID ready</div>
+            <div class="done-sub">Copied to your clipboard and sent to your WhatsApp</div>
+          </div>
+        </div>
+        <div class="done-step">
+          <div class="done-icon" style="background:rgba(124,92,252,0.15);">🚀</div>
+          <div class="done-body">
+            <div class="done-title">Deploy your bot</div>
+            <div class="done-sub">Log in to NovaSpark Nodes and paste your SESSION_ID as an environment variable</div>
+          </div>
+        </div>
+        <div class="done-step">
+          <div class="done-icon" style="background:rgba(91,157,249,0.15);">💬</div>
+          <div class="done-body">
+            <div class="done-title">Test it out</div>
+            <div class="done-sub">Once deployed, send <code style="background:rgba(124,92,252,0.12);border:1px solid rgba(124,92,252,0.2);color:var(--accent);border-radius:5px;padding:1px 6px;font-family:'JetBrains Mono',monospace;">.menu</code> to your bot number</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
         <a class="deploy-btn" href="https://novaspark-nodes.zone.id" target="_blank">
-          🚀 Deploy on NovaSpark Nodes
+          🚀 Open NovaSpark Nodes
         </a>
-        <a class="deploy-btn" href="https://github.com/dev-modder/NovaSpark-Bot" target="_blank" style="background:linear-gradient(135deg,#2d3748,#1a202c);">
-          ⭐ GitHub Repo
-        </a>
+        <button class="btn btn-ghost" style="padding:13px 22px; border-radius:12px; font-size:14px; font-weight:700;"
+          onclick="restartPairing()">↩ Pair Another</button>
       </div>
     </div>
 
@@ -880,6 +918,38 @@
     const t = document.getElementById('copyToast');
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function restartPairing() {
+    // Cancel any running polls/timers
+    if (pollInterval)  clearInterval(pollInterval);
+    if (codeTimerInt)  clearInterval(codeTimerInt);
+
+    // Clean up server-side session
+    if (sessionKey) {
+      fetch('/api/session/' + sessionKey, { method: 'DELETE' }).catch(() => {});
+    }
+
+    // Reset state
+    sessionKey = '';
+    localStorage.removeItem('ns_session');
+
+    // Reset UI
+    document.getElementById('codeVal').textContent = '------';
+    document.getElementById('codeSection').style.display = 'none';
+    document.getElementById('qrSection').style.display   = 'none';
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('getPairBtn').disabled = false;
+    document.getElementById('getQRBtn').disabled   = false;
+
+    // Remove any dynamically added QR images
+    const oldImg = document.querySelector('#qrSection img');
+    if (oldImg) oldImg.remove();
+    document.getElementById('qrCanvas').style.display = '';
+
+    hideStatus();
+    selectMethod('pair');
+    setStep(1);
   }
 
   // Auto-restore session if already paired
